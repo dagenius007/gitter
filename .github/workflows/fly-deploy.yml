@@ -18,8 +18,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Verify fly.toml exists
+        run: ls -la backend/fly.toml
+
       - name: Deploy backend to Fly.io
-        working-directory: ./backend
-        run: flyctl deploy --remote-only -a gitter-backend --config fly.toml
+        run: cd backend && flyctl deploy --remote-only -a gitter-backend --config fly.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
