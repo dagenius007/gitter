@@ -1,0 +1,8 @@
+/backend/.env
+/web/.env
+/backend/zana-server
+/web/node_modules
+.vscode/
+.idea/
+.DS_Store
+.qodo
