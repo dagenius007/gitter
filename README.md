@@ -1,6 +1,6 @@
-# ZANA – Interactive Speech (Go + React)
+# GITTER – Interactive Speech (Go + React)
 
-ZANA is an interactive, voice-enabled assistant built on OpenAI APIs. Backend in Go, frontend in React (Vite). You can chat with ZANA via text or voice; voice requests are transcribed to text and replies are synthesized back to audio.
+GITTER is an interactive, voice-enabled assistant built on OpenAI APIs. Backend in Go, frontend in React (Vite). You can chat with GITTER via text or voice; voice requests are transcribed to text and replies are synthesized back to audio.
 
 ## Prerequisites
 
