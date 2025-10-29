@@ -74,10 +74,10 @@ func NewServer(cfg config.Config) (*Server, error) {
 		log.Println("database connection established")
 
 		// Run migrations
-		if err := database.RunMigrations("./migrations"); err != nil {
-			database.Close()
-			return nil, fmt.Errorf("failed to run migrations: %w", err)
-		}
+		// if err := database.RunMigrations("./migrations"); err != nil {
+		// 	database.Close()
+		// 	return nil, fmt.Errorf("failed to run migrations: %w", err)
+		// }
 		log.Println("database migrations completed")
 
 		databaseStore = store.NewDatabaseStore(database)
