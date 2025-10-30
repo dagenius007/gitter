@@ -149,6 +149,13 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.Append(sid, store.Message{Role: "user", Content: req.Message})
 
+	// Check if GitHub account is connected for this session
+	token := s.getGitHubToken(sid)
+	if strings.TrimSpace(token) == "" {
+		s.writeError(w, http.StatusUnauthorized, "Please connect your GitHub account to use this application. This service helps you manage GitHub pull requests - fetching, listing, merging, and viewing PR comments.")
+		return
+	}
+
 	// Single-pass LLM intent classification and handling
 	{
 		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
@@ -278,6 +285,13 @@ func (s *Server) handleVoice(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.Append(sid, store.Message{Role: "user", Content: transcribed})
 
+	// Check if GitHub account is connected for this session
+	token := s.getGitHubToken(sid)
+	if strings.TrimSpace(token) == "" {
+		s.writeError(w, http.StatusUnauthorized, "Please connect your GitHub account to use this application. This service helps you manage GitHub pull requests - fetching, listing, merging, and viewing PR comments.")
+		return
+	}
+
 	// Single-pass LLM intent classification and handling (voice)
 	{
 		if reply, intent, ok := s.classifyAndHandle(ctx, sid, transcribed); ok {
@@ -371,6 +385,27 @@ func getOrCreateSessionID(r *http.Request, w http.ResponseWriter) string {
 	return sid
 }
 
+// getGitHubToken retrieves the GitHub token for a session with proper fallback:
+// 1. Try database (session-specific token)
+// 2. Try file-based token store (OAuth token)
+// 3. Try config (fallback)
+func (s *Server) getGitHubToken(sessionID string) string {
+	// First priority: Check database for session-specific token
+	if s.databaseStore != nil {
+		if auth, err := s.databaseStore.GetGitHubAuth(sessionID); err == nil && auth != nil && strings.TrimSpace(auth.GitHubToken) != "" {
+			return auth.GitHubToken
+		}
+	}
+
+	// Second priority: Check file-based token store (OAuth flow)
+	if token, err := s.tokenStore.Read(); err == nil && token != nil && strings.TrimSpace(token.AccessToken) != "" {
+		return token.AccessToken
+	}
+
+	// Last priority: Fall back to config token
+	return s.cfg.GitHubToken
+}
+
 // classifyAndHandle: LLM classifies a single intent and we handle it once.
 // Returns reply text and a structured intent for the frontend.
 func (s *Server) classifyAndHandle(ctx context.Context, sessionID, message string) (string, *types.IntentResponse, bool) {
@@ -414,15 +449,11 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 
 	switch targetType {
 	case "list_prs_mine", "list_prs_review":
-		token := s.cfg.GitHubToken
-		if strings.TrimSpace(token) == "" {
-			if t, _ := s.tokenStore.Read(); t != nil {
-				token = t.AccessToken
-			}
-		}
+		fmt.Println("listing PRs", targetType)
+		token := s.getGitHubToken(sessionID)
 		if strings.TrimSpace(token) == "" {
 			// Ask user to auth via friendly reply and structured intent.
-			reply := "Whoops! I can't peek at your PRs yet — let's connect GitHub first."
+			reply := "Whoops! I need your GitHub connection to fetch your pull requests. Let's connect GitHub first."
 			return reply, &types.IntentResponse{Type: "require_github_auth"}, true
 		}
 		var prs []gh.PR
@@ -433,7 +464,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 			prs, err = s.mcp.ListPRsForReview(ctx, token)
 		}
 		if err != nil {
-			reply := "Yikes, GitHub sneezed on me. Try again in a moment?"
+			reply := "I couldn't fetch your pull requests from GitHub right now. This might be a temporary issue with GitHub's API. Try again in a moment?"
 			return reply, &types.IntentResponse{Type: "error", Payload: map[string]any{"message": "failed_to_fetch_prs"}}, true
 		}
 		kind := gh.IntentListMine
@@ -457,6 +488,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		}
 		return reply, &types.IntentResponse{Type: "show_prs", Payload: map[string]any{"prs": prs, "kind": listKind}}, true
 	case "get_pr_comments":
+		fmt.Println("getting PR comments", targetType)
 		repo, _ := mergedArgs["repo"].(string)
 		var prNumber int
 		if n, ok := mergedArgs["pr_number"].(float64); ok {
@@ -516,14 +548,9 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
 		}
 
-		token := s.cfg.GitHubToken
+		token := s.getGitHubToken(sessionID)
 		if strings.TrimSpace(token) == "" {
-			if t, _ := s.tokenStore.Read(); t != nil {
-				token = t.AccessToken
-			}
-		}
-		if strings.TrimSpace(token) == "" {
-			reply := "I need your GitHub access before I can fetch comments."
+			reply := "I need your GitHub connection to fetch PR comments. Let's connect GitHub first."
 			return reply, &types.IntentResponse{Type: "require_github_auth"}, true
 		}
 
@@ -531,14 +558,15 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		comments, err := s.mcp.GetPRComments(ctx, token, repo, prNumber)
 		if err != nil {
 			fmt.Println("Error fetching comments", err)
-			reply := "Couldn't fetch comments right now. Mind trying again?"
+			reply := "I couldn't retrieve the PR comments from GitHub. This could be a temporary GitHub API issue or the PR might not exist. Mind trying again?"
 			return reply, &types.IntentResponse{Type: "error", Payload: map[string]any{"message": "failed_to_fetch_comments"}}, true
 		}
 		// Update memory on success
 		s.store.ClearPendingIntent(sessionID)
-		reply := fmt.Sprintf("I found %d comment(s) on %s#%d.", len(comments), repo, prNumber)
+		reply := fmt.Sprintf("I found %d comment(s) on GitHub pull request %s#%d.", len(comments), repo, prNumber)
 		return reply, &types.IntentResponse{Type: "show_comments", Payload: map[string]any{"repo": repo, "prNumber": prNumber, "comments": comments}}, true
 	case "merge_pr":
+		fmt.Println("merging PR", targetType)
 		repo, _ := mergedArgs["repo"].(string)
 		var prNumber int
 		if n, ok := mergedArgs["pr_number"].(float64); ok {
@@ -597,22 +625,17 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 			s.store.SetPendingIntent(sessionID, "merge_pr", mergedArgs)
 			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
 		}
-		token := s.cfg.GitHubToken
+		token := s.getGitHubToken(sessionID)
 		if strings.TrimSpace(token) == "" {
-			if t, _ := s.tokenStore.Read(); t != nil {
-				token = t.AccessToken
-			}
-		}
-		if strings.TrimSpace(token) == "" {
-			reply := "I need your GitHub access before I can merge."
+			reply := "I need your GitHub connection to merge pull requests. Let's connect GitHub first."
 			return reply, &types.IntentResponse{Type: "require_github_auth"}, true
 		}
 		if err := s.mcp.MergePR(ctx, token, repo, prNumber, method); err != nil {
-			reply := "Merge didn't work — want me to check the status first?"
+			reply := "I couldn't merge the pull request on GitHub. This could be due to failing checks, merge conflicts, or insufficient permissions. Would you like me to check the PR status?"
 			return reply, &types.IntentResponse{Type: "error", Payload: map[string]any{"message": "merge_failed"}}, true
 		}
 		s.store.ClearPendingIntent(sessionID)
-		reply := fmt.Sprintf("Merged %s#%d with %s.", repo, prNumber, method)
+		reply := fmt.Sprintf("Successfully merged GitHub pull request %s#%d using %s method.", repo, prNumber, method)
 		return reply, &types.IntentResponse{Type: "merged", Payload: map[string]any{"repo": repo, "prNumber": prNumber, "method": method}}, true
 	case "clarify":
 		// Use LLM-provided playful message
@@ -676,9 +699,9 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 func (s *Server) formatPRListReply(kind gh.IntentKind, prs []gh.PR) string {
 	if len(prs) == 0 {
 		if kind == gh.IntentListReview {
-			return "You have no pull requests to review."
+			return "You have no GitHub pull requests to review at the moment."
 		}
-		return "You have no open pull requests."
+		return "You have no open pull requests on GitHub."
 	}
 	max := 5
 	if len(prs) < max {
@@ -686,9 +709,9 @@ func (s *Server) formatPRListReply(kind gh.IntentKind, prs []gh.PR) string {
 	}
 	var b strings.Builder
 	if kind == gh.IntentListReview {
-		fmt.Fprintf(&b, "You have %d pull request(s) to review. ", len(prs))
+		fmt.Fprintf(&b, "You have %d GitHub pull request(s) to review. ", len(prs))
 	} else {
-		fmt.Fprintf(&b, "You have %d pull request(s). ", len(prs))
+		fmt.Fprintf(&b, "You have %d GitHub pull request(s). ", len(prs))
 	}
 	for i := 0; i < max; i++ {
 		p := prs[i]
