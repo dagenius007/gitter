@@ -86,7 +86,11 @@ func NewServer(cfg config.Config) (*Server, error) {
 	}
 
 	mcp := gh.NewMCPClient(cfg.GitHubMCPAddress, cfg.GitHubMCPEnabled)
-	intent, _ := gh.LoadIntentClassifier("./prompts/intent.yaml", client, cfg.Model)
+	intent, err := gh.LoadIntentClassifier("./prompts/intent.yaml", client, cfg.Model)
+	if err != nil {
+		log.Println("error loading intent classifier", err)
+		return nil, fmt.Errorf("failed to load intent classifier: %w", err)
+	}
 	s := &Server{
 		router:        r,
 		store:         ms,
@@ -164,31 +168,18 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Single-pass LLM intent classification and handling
-	{
-		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-		defer cancel()
-		if reply, intent, ok := s.classifyAndHandle(ctx, sid, req.Message); ok {
-			s.store.Append(sid, store.Message{Role: "assistant", Content: reply})
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("X-Session-Id", sid)
-			_ = json.NewEncoder(w).Encode(types.ChatResponse{SessionID: sid, Reply: reply, Intent: intent})
-			return
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	reply, err := s.completeOnce(ctx, sid)
-	if err != nil {
-		log.Println("chat error:", err)
-		s.writeError(w, http.StatusBadGateway, "chat generation failed")
+	reply, intent, ok := s.classifyAndHandle(ctx, sid, req.Message)
+	if !ok {
+		log.Printf("[chat] intent classification failed for message: %s", req.Message)
+		s.writeError(w, http.StatusInternalServerError, "I'm having trouble understanding your request right now. Please try again.")
 		return
 	}
 	s.store.Append(sid, store.Message{Role: "assistant", Content: reply})
-
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Session-Id", sid)
-	_ = json.NewEncoder(w).Encode(types.ChatResponse{SessionID: sid, Reply: reply})
+	_ = json.NewEncoder(w).Encode(types.ChatResponse{SessionID: sid, Reply: reply, Intent: intent})
 }
 
 func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
@@ -219,6 +210,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 	messages := s.convertMessages(s.store.Get(sid))
+
 	stream, err := s.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:    s.cfg.Model,
 		Messages: messages,
@@ -308,19 +300,10 @@ func (s *Server) handleVoice(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Single-pass LLM intent classification and handling (voice)
-	{
-		if reply, intent, ok := s.classifyAndHandle(ctx, sid, transcribed); ok {
-			s.store.Append(sid, store.Message{Role: "assistant", Content: reply})
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("X-Session-Id", sid)
-			_ = json.NewEncoder(w).Encode(types.ChatResponse{SessionID: sid, Reply: reply, Transcript: transcribed, Intent: intent})
-			return
-		}
-	}
-	reply, err := s.completeOnce(ctx, sid)
-	if err != nil {
-		log.Println("chat error (voice):", err)
-		s.writeError(w, http.StatusBadGateway, "chat failed")
+	reply, intent, ok := s.classifyAndHandle(ctx, sid, transcribed)
+	if !ok {
+		log.Printf("[voice] intent classification failed for message: %s", transcribed)
+		s.writeError(w, http.StatusInternalServerError, "I'm having trouble understanding your request right now. Please try again.")
 		return
 	}
 	s.store.Append(sid, store.Message{Role: "assistant", Content: reply})
@@ -328,22 +311,7 @@ func (s *Server) handleVoice(w http.ResponseWriter, r *http.Request) {
 	// Return JSON (frontend will speak via browser TTS)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Session-Id", sid)
-	_ = json.NewEncoder(w).Encode(types.ChatResponse{SessionID: sid, Reply: reply, Transcript: transcribed})
-}
-
-func (s *Server) completeOnce(ctx context.Context, sessionID string) (string, error) {
-	messages := s.convertMessages(s.store.Get(sessionID))
-	resp, err := s.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model:    s.cfg.Model,
-		Messages: messages,
-	})
-	if err != nil {
-		return "", err
-	}
-	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no choices")
-	}
-	return resp.Choices[0].Message.Content, nil
+	_ = json.NewEncoder(w).Encode(types.ChatResponse{SessionID: sid, Reply: reply, Transcript: transcribed, Intent: intent})
 }
 
 func (s *Server) convertMessages(msgs []store.Message) []openai.ChatCompletionMessage {
@@ -424,6 +392,7 @@ func (s *Server) getGitHubToken(sessionID string) string {
 // classifyAndHandle: LLM classifies a single intent and we handle it once.
 // Returns reply text and a structured intent for the frontend.
 func (s *Server) classifyAndHandle(ctx context.Context, sessionID, message string) (string, *types.IntentResponse, bool) {
+	fmt.Println("classifying and handling", message)
 	if s.intent == nil {
 		return "", nil, false
 	}
