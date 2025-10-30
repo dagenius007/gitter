@@ -393,7 +393,7 @@ func getOrCreateSessionID(r *http.Request, w http.ResponseWriter) string {
 	if sid == "" {
 		sid = newSessionID()
 		log.Printf("[session] creating new session: %s for endpoint: %s", sid, r.URL.Path)
-		SetSessionCookie(w, sid)
+		SetSessionCookie(w, r, sid)
 	} else {
 		log.Printf("[session] reusing existing session: %s for endpoint: %s", sid, r.URL.Path)
 	}

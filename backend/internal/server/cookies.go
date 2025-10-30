@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -13,15 +14,27 @@ const (
 )
 
 // SetSessionCookie sets an HTTP-only session cookie with 15-minute expiration
-func SetSessionCookie(w http.ResponseWriter, sessionID string) {
+func SetSessionCookie(w http.ResponseWriter, r *http.Request, sessionID string) {
+	// Detect if request is over HTTPS
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+
+	fmt.Println("isSecure", isSecure)
+	
+
+	// Use SameSite=None for cross-origin when secure, Lax otherwise
+	sameSite := http.SameSiteLaxMode
+	if isSecure {
+		sameSite = http.SameSiteNoneMode
+	}
+
 	cookie := &http.Cookie{
 		Name:     CookieName,
 		Value:    sessionID,
 		Path:     "/",
 		MaxAge:   int(CookieMaxAge.Seconds()),
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   false, // Set to true in production with HTTPS
+		SameSite: sameSite,
+		Secure:   isSecure,
 	}
 	http.SetCookie(w, cookie)
 }

@@ -115,7 +115,7 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	s.store.ClearOAuthState(sid)
 
 	// Set session cookie so popup and main window share the same session
-	SetSessionCookie(w, sid)
+	SetSessionCookie(w, r, sid)
 
 	// Redirect to frontend with success indicator
 	redirectURL := fmt.Sprintf("%s?githubAuth=success", s.cfg.FrontendURL)
