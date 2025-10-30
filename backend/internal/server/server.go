@@ -433,8 +433,10 @@ func (s *Server) classifyAndHandle(ctx context.Context, sessionID, message strin
 
 	ci, err := s.intent.ClassifyChat(ctx, chat)
 	if err != nil || ci == nil {
+		fmt.Println("error classifying chat", err)
 		return "", nil, false
 	}
+	fmt.Println("classified chat", ci)
 	return s.handleWithArgs(ctx, sessionID, ci)
 }
 

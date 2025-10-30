@@ -55,6 +55,7 @@ func LoadIntentClassifier(path string, client *openai.Client, model string) (*In
 // using the same intent spec. It prepends the system instructions and function schema
 // then appends the provided chat messages as-is.
 func (c *IntentClassifier) ClassifyChat(ctx context.Context, chat []openai.ChatCompletionMessage) (*ClassifiedIntent, error) {
+	fmt.Println("classifying chat", chat)
 	sys := c.spec.System
 	var fnSchema []map[string]interface{}
 	for _, f := range c.spec.Functions {
@@ -141,5 +142,6 @@ func (c *IntentClassifier) ClassifyChat(ctx context.Context, chat []openai.ChatC
 	if out.Args == nil {
 		out.Args = map[string]interface{}{}
 	}
+	fmt.Println("classified chat", out)
 	return &out, nil
 }
