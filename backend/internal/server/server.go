@@ -152,7 +152,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Check if GitHub account is connected for this session
 	token := s.getGitHubToken(sid)
 	if strings.TrimSpace(token) == "" {
-		s.writeError(w, http.StatusUnauthorized, "Please connect your GitHub account to use this application. This service helps you manage GitHub pull requests - fetching, listing, merging, and viewing PR comments.")
+		reply := "Please connect your GitHub account to use this application. This service helps you manage GitHub pull requests - fetching, listing, merging, and viewing PR comments."
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Session-Id", sid)
+		_ = json.NewEncoder(w).Encode(types.ChatResponse{
+			SessionID: sid,
+			Reply:     reply,
+			Intent:    &types.IntentResponse{Type: "require_github_auth"},
+		})
 		return
 	}
 
@@ -288,7 +295,15 @@ func (s *Server) handleVoice(w http.ResponseWriter, r *http.Request) {
 	// Check if GitHub account is connected for this session
 	token := s.getGitHubToken(sid)
 	if strings.TrimSpace(token) == "" {
-		s.writeError(w, http.StatusUnauthorized, "Please connect your GitHub account to use this application. This service helps you manage GitHub pull requests - fetching, listing, merging, and viewing PR comments.")
+		reply := "Please connect your GitHub account to use this application. This service helps you manage GitHub pull requests - fetching, listing, merging, and viewing PR comments."
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Session-Id", sid)
+		_ = json.NewEncoder(w).Encode(types.ChatResponse{
+			SessionID:  sid,
+			Reply:      reply,
+			Transcript: transcribed,
+			Intent:     &types.IntentResponse{Type: "require_github_auth"},
+		})
 		return
 	}
 
@@ -465,7 +480,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		}
 		if err != nil {
 			reply := "I couldn't fetch your pull requests from GitHub right now. This might be a temporary issue with GitHub's API. Try again in a moment?"
-			return reply, &types.IntentResponse{Type: "error", Payload: map[string]any{"message": "failed_to_fetch_prs"}}, true
+			return reply, &types.IntentResponse{Type: "error"}, true
 		}
 		kind := gh.IntentListMine
 		if targetType == "list_prs_review" {
@@ -526,7 +541,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 					// store pending with known pr_number
 					mergedArgs["pr_number"] = prNumber
 					s.store.SetPendingIntent(sessionID, "get_pr_comments", mergedArgs)
-					return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+					return msg, &types.IntentResponse{Type: "clarify"}, true
 				}
 			}
 		}
@@ -535,17 +550,17 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		if repo == "" && prNumber <= 0 {
 			msg := "Which repository and PR number should I look at?"
 			s.store.SetPendingIntent(sessionID, "get_pr_comments", mergedArgs)
-			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+			return msg, &types.IntentResponse{Type: "clarify"}, true
 		}
 		if repo == "" {
 			msg := fmt.Sprintf("Which repo is PR %d in?", prNumber)
 			s.store.SetPendingIntent(sessionID, "get_pr_comments", mergedArgs)
-			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+			return msg, &types.IntentResponse{Type: "clarify"}, true
 		}
 		if prNumber <= 0 {
 			msg := fmt.Sprintf("Which PR number in %s?", repo)
 			s.store.SetPendingIntent(sessionID, "get_pr_comments", mergedArgs)
-			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+			return msg, &types.IntentResponse{Type: "clarify"}, true
 		}
 
 		token := s.getGitHubToken(sessionID)
@@ -559,7 +574,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		if err != nil {
 			fmt.Println("Error fetching comments", err)
 			reply := "I couldn't retrieve the PR comments from GitHub. This could be a temporary GitHub API issue or the PR might not exist. Mind trying again?"
-			return reply, &types.IntentResponse{Type: "error", Payload: map[string]any{"message": "failed_to_fetch_comments"}}, true
+			return reply, &types.IntentResponse{Type: "error"}, true
 		}
 		// Update memory on success
 		s.store.ClearPendingIntent(sessionID)
@@ -605,7 +620,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 					msg := fmt.Sprintf("Did you mean PR %d in %s?", prNumber, strings.Join(matches, " or "))
 					mergedArgs["pr_number"] = prNumber
 					s.store.SetPendingIntent(sessionID, "merge_pr", mergedArgs)
-					return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+					return msg, &types.IntentResponse{Type: "clarify"}, true
 				}
 			}
 		}
@@ -613,17 +628,17 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		if repo == "" && prNumber <= 0 {
 			msg := "Which repo and PR should I merge?"
 			s.store.SetPendingIntent(sessionID, "merge_pr", mergedArgs)
-			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+			return msg, &types.IntentResponse{Type: "clarify"}, true
 		}
 		if repo == "" {
 			msg := fmt.Sprintf("Which repo is PR %d in?", prNumber)
 			s.store.SetPendingIntent(sessionID, "merge_pr", mergedArgs)
-			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+			return msg, &types.IntentResponse{Type: "clarify"}, true
 		}
 		if prNumber <= 0 {
 			msg := fmt.Sprintf("Which PR number in %s?", repo)
 			s.store.SetPendingIntent(sessionID, "merge_pr", mergedArgs)
-			return msg, &types.IntentResponse{Type: "clarify", Payload: map[string]any{"message": msg}}, true
+			return msg, &types.IntentResponse{Type: "clarify"}, true
 		}
 		token := s.getGitHubToken(sessionID)
 		if strings.TrimSpace(token) == "" {
@@ -632,7 +647,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		}
 		if err := s.mcp.MergePR(ctx, token, repo, prNumber, method); err != nil {
 			reply := "I couldn't merge the pull request on GitHub. This could be due to failing checks, merge conflicts, or insufficient permissions. Would you like me to check the PR status?"
-			return reply, &types.IntentResponse{Type: "error", Payload: map[string]any{"message": "merge_failed"}}, true
+			return reply, &types.IntentResponse{Type: "error"}, true
 		}
 		s.store.ClearPendingIntent(sessionID)
 		reply := fmt.Sprintf("Successfully merged GitHub pull request %s#%d using %s method.", repo, prNumber, method)
@@ -659,7 +674,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 
 		repo = strings.TrimSpace(repo)
 		// No slot memory update; transcript carries context
-		payload := map[string]any{"message": msg}
+		payload := map[string]any{}
 		if repo != "" {
 			payload["repo"] = repo
 		}
@@ -686,7 +701,7 @@ func (s *Server) handleWithArgs(ctx context.Context, sessionID string, ci *gh.Cl
 		}
 		// Do not carry stale pending intents across unknowns
 		s.store.ClearPendingIntent(sessionID)
-		return msg, &types.IntentResponse{Type: "not_implemented", Payload: map[string]any{"message": msg}}, true
+		return msg, &types.IntentResponse{Type: "not_implemented"}, true
 	default:
 		return "", nil, false
 	}
