@@ -18,6 +18,6 @@ func main() {
 		os.Exit(1)
 	}
 	addr := ":" + cfg.Port
-	fmt.Printf("ZANA server listening on %s\n", addr)
+	fmt.Printf("GITTER server listening on %s\n", addr)
 	log.Fatal(http.ListenAndServe(addr, s.Router()))
 }

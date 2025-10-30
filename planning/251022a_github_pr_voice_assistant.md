@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a voice-enabled GitHub AI assistant that helps developers manage their pull requests through natural conversation. The assistant leverages the existing ZANA voice infrastructure (ElevenLabs TTS + OpenAI Whisper) and integrates with GitHub via direct REST API calls to provide hands-free PR management.
+Build a voice-enabled GitHub AI assistant that helps developers manage their pull requests through natural conversation. The assistant leverages the existing GITTER voice infrastructure (ElevenLabs TTS + OpenAI Whisper) and integrates with GitHub via direct REST API calls to provide hands-free PR management.
 
 **Note**: Future versions may migrate to MCP (Model Context Protocol) for standardized GitHub interactions, but v1 uses direct HTTP API calls to avoid Docker/MCP server dependencies.
 
