@@ -17,4 +17,5 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY --from=builder /run-app /usr/local/bin/
 COPY --from=builder /usr/src/app/migrations ./migrations
+COPY --from=builder /usr/src/app/internal/prompts ./internal/prompts
 CMD ["run-app"]
