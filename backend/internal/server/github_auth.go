@@ -77,6 +77,11 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "invalid oauth state")
 		return
 	}
+
+	fmt.Println("sid", sid)
+	fmt.Println("state", state)
+	fmt.Println("code", code)
+
 	ctx := r.Context()
 	tok, err := s.oauthCfg.Exchange(ctx, code)
 	if err != nil {
