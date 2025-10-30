@@ -74,6 +74,12 @@ export default function App() {
     setSessionId("");
     const savedVoice = localStorage.getItem("zanaElevenVoiceId");
     if (savedVoice) setElevenVoiceId(savedVoice);
+
+    // Clear session flags on page load
+    try {
+      sessionStorage.removeItem("gitter_greeting_spoken");
+      sessionStorage.removeItem("gitter_voice_initialized");
+    } catch {}
   }, []);
 
   // Check GitHub status on session
