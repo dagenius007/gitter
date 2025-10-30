@@ -86,7 +86,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 	}
 
 	mcp := gh.NewMCPClient(cfg.GitHubMCPAddress, cfg.GitHubMCPEnabled)
-	intent, err := gh.LoadIntentClassifier("../prompts/intent.yaml", client, cfg.Model)
+	intent, err := gh.LoadIntentClassifier("internal/prompts/intent.yaml", client, cfg.Model)
 	if err != nil {
 		log.Println("error loading intent classifier", err)
 		return nil, fmt.Errorf("failed to load intent classifier: %w", err)
