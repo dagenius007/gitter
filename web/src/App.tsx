@@ -86,6 +86,22 @@ export default function App() {
     })();
   }, [sessionId]);
 
+  // Handle OAuth callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("githubAuth") === "success") {
+      // OAuth callback successful - close popup window
+      (async () => {
+        try {
+          // Check status to update UI
+          await checkGitHubStatus();
+        } catch {}
+        // Close the popup
+        window.close();
+      })();
+    }
+  }, []);
+
   // Load available voices and pick a pleasant English voice by preference
   useEffect(() => {
     const updateVoices = () => {

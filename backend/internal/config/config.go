@@ -28,6 +28,8 @@ type Config struct {
 	GitHubScopes       []string
 	// Optional static GitHub token (Personal Access Token) for local testing
 	GitHubToken string
+	// Frontend URL for OAuth callback redirect
+	FrontendURL string
 	// GitHub MCP
 	GitHubMCPAddress string
 	GitHubMCPEnabled bool
@@ -54,6 +56,7 @@ func Load() Config {
 		GitHubTokenFile:    getEnvDefault("GITHUB_TOKEN_FILE", "data/github_token.json"),
 		GitHubScopes:       getEnvListDefault("GITHUB_OAUTH_SCOPES", []string{"repo", "read:user"}),
 		GitHubToken:        os.Getenv("GITHUB_TOKEN"),
+		FrontendURL:        getEnvDefault("FRONTEND_URL", "http://localhost:5173"),
 		GitHubMCPAddress:   os.Getenv("GITHUB_MCP_ADDRESS"),
 		GitHubMCPEnabled:   getEnvBoolDefault("GITHUB_MCP_ENABLED", false),
 		DefaultRepoOwner:   os.Getenv("DEFAULT_REPO_OWNER"),

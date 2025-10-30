@@ -8,11 +8,11 @@ import (
 const (
 	// CookieName is the name of the session cookie
 	CookieName = "zana_session"
-	// CookieMaxAge is the duration the cookie is valid (30 minutes)
-	CookieMaxAge = 30 * time.Minute
+	// CookieMaxAge is the duration the cookie is valid (15 minutes)
+	CookieMaxAge = 15 * time.Minute
 )
 
-// SetSessionCookie sets an HTTP-only session cookie with 30-minute expiration
+// SetSessionCookie sets an HTTP-only session cookie with 15-minute expiration
 func SetSessionCookie(w http.ResponseWriter, sessionID string) {
 	cookie := &http.Cookie{
 		Name:     CookieName,

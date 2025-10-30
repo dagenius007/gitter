@@ -109,9 +109,13 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 	// Store username in memory store for quick access
 	s.store.SetUsername(sid, username)
 	s.store.ClearOAuthState(sid)
-	// Respond with a lightweight close page
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = io.WriteString(w, "<script>window.close();</script>Authenticated. You can close this window.")
+
+	// Set session cookie so popup and main window share the same session
+	SetSessionCookie(w, sid)
+
+	// Redirect to frontend with success indicator
+	redirectURL := fmt.Sprintf("%s?githubAuth=success", s.cfg.FrontendURL)
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func randomState() string {
